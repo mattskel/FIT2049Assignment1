@@ -25,6 +25,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <sstream>
 
 class Game
 {
@@ -40,7 +41,19 @@ private:
 	// These are to draw sprites and text over our game. We'll talk about this next week.
 	SpriteBatch* m_spriteBatch;
 	SpriteFont* m_arialFont;
+	SpriteFont* m_arialFont18;
+
+	std::wstring m_highScoreText;
+	std::wstring m_turnsLeftText;
+	std::wstring m_gameOverText;
+	int m_score;
+	int m_lives;
+	int m_turnsLeft;
+	boolean m_gameOver;
 	
+	Button* m_exitButton;
+	Button* m_restartButton;
+
 	Shader* m_unlitShader;
 	Shader* m_texturedShader;
 
@@ -86,7 +99,9 @@ private:
 	void InitUI();
 
 	void DrawUI();
-
+	void OnRestartButtonPress();
+	void OnExitButtonPress();
+	void RefreshUI();
 	// Test our object
 	void TestColouredCube();
 
@@ -114,6 +129,9 @@ public:
 	void Shutdown(); //Cleanup everything we initialised
 
 	void UpdateAdjacentSquares(); // Checks if adjacent squares are the same colour and removes them if they are
+
+	void GameOver();
+	void Restart();
 };
 
 #endif

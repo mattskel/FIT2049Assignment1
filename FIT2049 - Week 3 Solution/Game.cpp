@@ -17,6 +17,9 @@ Game::Game()
 	m_spriteBatch = NULL;
 	m_arialFont = NULL;
 
+	// Initialise the score to 0
+	m_score = 0;
+
 	m_cubeMatrix = Matrix::Identity;
 
 	m_cubePos = Vector3::Zero;
@@ -31,6 +34,9 @@ Game::Game()
 	// Initialise m_rows and m_columns
 	m_rows = 10;
 	m_columns = 10;
+
+	m_exitButton = NULL;
+	m_restartButton = NULL;
 
 }
 
@@ -95,6 +101,10 @@ bool Game::Initialise(Direct3D* renderer, InputController* input)
 	int nextColourIndex = std::rand() % m_textureArray.size();
 	m_nextCubeColour = m_textureArray[nextColourIndex]; 
 	m_nextColour = m_nextColourArray[nextColourIndex];
+
+	// Initialise our game stats
+	m_gameOver = false;
+	m_turnsLeft = 10;
 
 	return true;
 }
@@ -275,27 +285,81 @@ void Game::LoadFonts()
 {
 	// There's a few different size fonts in there, you know
 	m_arialFont = new SpriteFont(m_renderer->GetDevice(), L"Assets/Fonts/Arial-12pt.spritefont");
+	m_arialFont18 = new SpriteFont(m_renderer->GetDevice(), L"Assets/Fonts/Arial-18pt.spritefont");
 }
 
 void Game::InitUI()
 {
 	m_spriteBatch = new SpriteBatch(m_renderer->GetDeviceContext());
+
+	m_restartButton = new Button(128, 64, Texture::GetTexture("ButtonWhite"), L"Restart", Vector2(80, 50), m_spriteBatch, m_arialFont, m_input, [this]
+	{
+		OnRestartButtonPress();
+	});
+	m_exitButton = new Button(128, 64, Texture::GetTexture("ButtonWhite"), L"Exit", Vector2(80, 120), m_spriteBatch, m_arialFont, m_input, [this]
+	{
+		OnExitButtonPress();
+	});
+
+	RefreshUI();
+}
+
+void Game::OnRestartButtonPress()
+{
+	Restart();
+}
+
+void Game::OnExitButtonPress() {
+	MessageBox(0, "Thanks For Playing!", "Goodbye", MB_OK);
+}
+
+void Game::RefreshUI()
+{
+	// Ensure text in UI matches latest scores etc (call this after every turn)
+	// Concatenate data into our label string using a wide string stream
+	std::wstringstream ss;
+	ss << "Score: " << m_score;
+	m_highScoreText = ss.str();
+
+	std::wstringstream turnsLeft;
+	turnsLeft << "Turns Left: " << m_turnsLeft;
+	m_turnsLeftText = turnsLeft.str();
+
+	std::wstringstream gameOver;
+	gameOver << "GAME OVER";
+	m_gameOverText = gameOver.str();
 }
 
 void Game::Update(float timestep)
+
 {
 	m_input->BeginUpdate();
 
-	// Execute our exercises here
-	//Exercise1(m_cubeMatrix, timestep);
+	if (!m_gameOver){
+		// Execute our exercises here
+		//Exercise1(m_cubeMatrix, timestep);
 
-	UpdateArrowMatrix();
+		UpdateArrowMatrix();
 
-	CheckForColourChange();
-	
+		CheckForColourChange();
+
+		if (m_turnsLeft <= 0) {
+			m_gameOver = true;
+		}
+
+		//m_currentCam->Update(timestep);
+		//RefreshUI();
+	}
+	else {
+		//TODO
+		//Generate Game Over screen
+		m_restartButton->Update();
+		m_exitButton->Update();
+	}
 	m_currentCam->Update(timestep);
-
+	RefreshUI();
 	m_input->EndUpdate();
+
 }
 
 void Game::TestColouredCube() {
@@ -329,7 +393,9 @@ void Game::CheckForColourChange() {
 
 	if (m_input->GetKeyUp(VK_SPACE)) {
 		ExecuteColourChange();
+		m_turnsLeft -= 1;
 	}
+	
 }
 
 void Game::ExecuteColourChange() {
@@ -395,20 +461,20 @@ void Game::Render()
 		m_cube->Render(m_renderer, m_testCubeArray[i]->GetMatrixCube(), m_currentCam, m_texturedShader, m_testCubeArray[i]->GetCubeTexture());
 	}
 	*/
+	if (!m_gameOver) {
+		for (int i = 0; i < m_rows; i++) {
+			for (int j = 0; j < m_columns; j++) {
+				//m_cube->Render(m_renderer, m_testCubeMatrix[i][j]->GetMatrixCube(), m_currentCam, m_texturedShader, m_testCubeMatrix[i][j]->GetCubeTexture());
 
-	for (int i = 0; i < m_rows; i++) {
-		for (int j = 0; j < m_columns; j++) {
-			//m_cube->Render(m_renderer, m_testCubeMatrix[i][j]->GetMatrixCube(), m_currentCam, m_texturedShader, m_testCubeMatrix[i][j]->GetCubeTexture());
-			
-			if (m_testCubeMatrix[i][j]) {
-				m_testCubeMatrix[i][j]->Render(m_renderer, m_currentCam);
+				if (m_testCubeMatrix[i][j]) {
+					m_testCubeMatrix[i][j]->Render(m_renderer, m_currentCam);
+				}
 			}
 		}
+
+		// Render the SelectionArrow
+		m_arrow->Render(m_renderer, m_testArrow->GetArrowMatrix(), m_currentCam, m_texturedShader, m_testArrow->GetArrowTexture());
 	}
-
-	// Render the SelectionArrow
-	m_arrow->Render(m_renderer, m_testArrow->GetArrowMatrix(), m_currentCam, m_texturedShader, m_testArrow->GetArrowTexture());
-
 
 	DrawUI();
 
@@ -430,10 +496,22 @@ void Game::DrawUI()
 	// Do UI drawing in here
 
 	// Here's how we draw a sprite over our game
+	
 	//m_blueNextSprite = Texture::GetTexture("NextBlue");
-	m_colourNextSprite = Texture::GetTexture(m_nextColour);
-	m_spriteBatch->Draw(m_colourNextSprite->GetShaderResourceView(), Vector2(20, 100), Color(1.0f, 1.0f, 1.0f));
+	if (!m_gameOver) {
+		m_colourNextSprite = Texture::GetTexture(m_nextColour);
+		m_spriteBatch->Draw(m_colourNextSprite->GetShaderResourceView(), Vector2(20, 100), Color(1.0f, 1.0f, 1.0f));
 
+		m_arialFont18->DrawString(m_spriteBatch, m_highScoreText.c_str(), Vector2(25, 220), Color(1.0f, 1.0f, 1.0f), 0, Vector2(0, 0));
+		m_arialFont18->DrawString(m_spriteBatch, m_turnsLeftText.c_str(), Vector2(25, 240), Color(1.0f, 1.0f, 1.0f), 0, Vector2(0, 0));
+
+	}
+	else {
+		m_arialFont18->DrawString(m_spriteBatch, m_highScoreText.c_str(), Vector2(480, 200), Color(1.0f, 1.0f, 1.0f), 0, Vector2(0, 0));
+		m_arialFont18->DrawString(m_spriteBatch, m_gameOverText.c_str(), Vector2(480, 300), Color(1.0f, 1.0f, 1.0f), 0, Vector2(0, 0));
+		m_restartButton->Render();
+		m_exitButton->Render();
+	}
 	m_spriteBatch->End();
 }
 
@@ -470,6 +548,35 @@ void Game::Shutdown()
 		Texture::ReleaseTexture(m_blueCubeTexture);
 	}
 
+}
+
+void Game::Restart() {
+
+	m_score = 0;
+	// Important to update this or m_gameOver will keep being reset to 0 when we go back into Update()
+	m_turnsLeft = 10;
+
+	m_exitButton = NULL;
+	m_restartButton = NULL;
+
+	InitUI();
+
+	float xPos = -2.0;
+	float zPos = -5.0;
+
+	// Initialise m_testCubeMatrix with ColouredCube objects
+	// The position is initialise here too
+	for (int i = 0; i < m_rows; i++) {
+		xPos = -5.0;
+		for (int j = 0; j < m_rows; j++) {
+			m_testCubeMatrix[i][j] = new ColouredCube(Mesh::GetMesh("GridCell"), m_texturedShader, xPos, zPos);
+			m_testCubeMatrix[i][j]->SetCubeTexture(m_textureArray[std::rand() % m_textureArray.size()]);
+			xPos += 1.0;
+		}
+		zPos += 1.0;
+	}
+
+	m_gameOver = false;
 }
 
 void Game::UpdateAdjacentSquares() {
@@ -549,10 +656,13 @@ void Game::UpdateAdjacentSquares() {
 	// TODO
 	// Need to check that colourGroupCubes is at least 3
 	// If it is then we can nullify all items in the vector
+	// We can also use this to update our score
 	if (colourGroupCubes.size() >= 3) {
+		m_score += colourGroupCubes.size();
 		for (ColouredCube* cube : colourGroupCubes) {
 			cube->SetMeshToNULL();
 		}
+
 	}
 
 }
